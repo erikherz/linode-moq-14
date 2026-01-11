@@ -5,14 +5,15 @@ MoQ relay infrastructure for Earthseed using Luke's moq-lite (Draft 14) with Clo
 ## Components
 
 ### 1. moq-relay (Luke's)
-The main relay server from [moq-dev/moq](https://github.com/moq-dev/moq). Handles:
+The main relay server from [moq-dev/moq](https://github.com/moq-dev/moq), included as a git submodule pinned to a tested commit. Handles:
 - Safari clients via WebSocket
 - Chrome clients via WebTransport (when not using CloudFlare)
 - Cluster federation with other relays
 
-Install directly from Luke's repo:
+Built from the included submodule:
 ```bash
-cargo install --git https://github.com/moq-dev/moq moq-relay
+cargo build --release -p moq-relay
+# Binary at: target/release/moq-relay
 ```
 
 ### 2. cloudflare-adapter
@@ -24,11 +25,19 @@ Bridges your moq-lite relay with CloudFlare's Draft 14 network. Enables:
 ## Building
 
 ```bash
-# Build the adapter
-cargo build --release
+# Clone with submodules
+git clone --recursive https://github.com/erikherz/linode-moq-14
+cd linode-moq-14
 
-# Binary will be at:
-# target/release/cloudflare-adapter
+# Build the adapter (stable Rust)
+cargo build --release
+# Binary at: target/release/cloudflare-adapter
+
+# Build the relay (requires nightly Rust for edition 2024)
+cd moq
+rustup run nightly cargo build --release -p moq-relay
+cd ..
+# Binary at: moq/target/release/moq-relay
 ```
 
 ## Deployment
@@ -36,11 +45,6 @@ cargo build --release
 ### Prerequisites
 - Domain with SSL cert (e.g., us-central.earthseed.live)
 - Let's Encrypt certs at `/etc/letsencrypt/live/<domain>/`
-
-### Install moq-relay
-```bash
-cargo install --git https://github.com/moq-dev/moq moq-relay
-```
 
 ### Systemd Services
 
@@ -52,8 +56,8 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/root/.cargo/bin/moq-relay \
-  --bind 0.0.0.0:443 \
+ExecStart=/root/linode-moq-14/moq/target/release/moq-relay \
+  --server-bind 0.0.0.0:443 \
   --tls-cert /etc/letsencrypt/live/us-central.earthseed.live/fullchain.pem \
   --tls-key /etc/letsencrypt/live/us-central.earthseed.live/privkey.pem
 Restart=always

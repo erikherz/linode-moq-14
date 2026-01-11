@@ -3,7 +3,7 @@ resolver = "2"
 members = ["cloudflare-adapter"]
 
 [workspace.dependencies]
-# Luke's moq-lite libraries (pinned to Jan 9, 2026 - before unstable is_multiple_of feature)
+# Luke's moq-lite libraries (pinned to same commit as submodule: fe72aeb)
 moq-lite = { git = "https://github.com/moq-dev/moq", rev = "fe72aeb", package = "moq-lite" }
 moq-native = { git = "https://github.com/moq-dev/moq", rev = "fe72aeb", package = "moq-native" }
 
