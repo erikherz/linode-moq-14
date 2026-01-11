@@ -59,7 +59,8 @@ Type=simple
 ExecStart=/root/linode-moq-14/moq/target/release/moq-relay \
   --server-bind 0.0.0.0:443 \
   --tls-cert /etc/letsencrypt/live/us-central.earthseed.live/fullchain.pem \
-  --tls-key /etc/letsencrypt/live/us-central.earthseed.live/privkey.pem
+  --tls-key /etc/letsencrypt/live/us-central.earthseed.live/privkey.pem \
+  --auth-public ""
 Restart=always
 RestartSec=1
 SyslogIdentifier=moq-earthseed
