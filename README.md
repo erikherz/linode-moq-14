@@ -77,7 +77,7 @@ After=network.target moq-earthseed.service
 [Service]
 Type=simple
 Environment=EARTHSEED_RELAY_URL=https://us-central.earthseed.live
-Environment=CLOUDFLARE_RELAY_URL=https://relay.quic.video
+Environment=CLOUDFLARE_RELAY_URL=https://relay-next.cloudflare.mediaoverquic.com
 Environment=STREAM_REGISTRY_URL=https://earthseed.live/api/stats/greet
 Environment=POLL_INTERVAL=5
 ExecStart=/root/linode-moq-14/target/release/cloudflare-adapter

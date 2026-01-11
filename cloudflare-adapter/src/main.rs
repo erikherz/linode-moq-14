@@ -25,8 +25,8 @@ pub struct Config {
     #[arg(long, env = "EARTHSEED_RELAY_URL")]
     pub relay_url: String,
 
-    /// CloudFlare relay URL (e.g., https://relay.quic.video)
-    #[arg(long, env = "CLOUDFLARE_RELAY_URL", default_value = "https://relay.quic.video")]
+    /// CloudFlare relay URL
+    #[arg(long, env = "CLOUDFLARE_RELAY_URL", default_value = "https://relay-next.cloudflare.mediaoverquic.com")]
     pub cloudflare_url: String,
 
     /// Your stream registry API (e.g., https://earthseed.live/api/stats/greet)
