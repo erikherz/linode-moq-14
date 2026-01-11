@@ -1,0 +1,17 @@
+[package]
+name = "cloudflare-adapter"
+version = "0.1.0"
+edition = "2021"
+description = "Bridges moq-lite relay with CloudFlare Draft 14 network"
+
+[dependencies]
+moq-lite = { workspace = true }
+moq-native = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+url = { workspace = true }
