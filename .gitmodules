@@ -1,3 +1,4 @@
 [submodule "moq"]
 	path = moq
-	url = https://github.com/moq-dev/moq
+	url = https://github.com/erikherz/moq
+	branch = cloudflare-patch
