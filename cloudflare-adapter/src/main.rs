@@ -116,8 +116,10 @@ async fn run_relay_connection(
     config: &Config,
     to_relay: Arc<moq_lite::Produce<OriginProducer, OriginConsumer>>,
 ) -> anyhow::Result<()> {
-    let token = config.relay_token.as_deref().unwrap_or("");
-    let url = Url::parse(&format!("{}/?jwt={}", config.relay_url, token))?;
+    let url = match &config.relay_token {
+        Some(token) => Url::parse(&format!("{}/?jwt={}", config.relay_url, token))?,
+        None => Url::parse(&config.relay_url)?,
+    };
 
     loop {
         tracing::info!(%url, "connecting to earthseed relay");
