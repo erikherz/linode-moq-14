@@ -142,34 +142,81 @@ async fn bridge_cloudflare_stream(
 }
 ```
 
-## Implementation Options
+## Fork Setup (Completed)
 
-### Option A: Patch in submodule
+We're using a fork of Luke's moq repo to hold our patches:
 
-1. Make changes directly in `moq/` submodule
-2. Commit to detached HEAD
-3. Update submodule reference in parent repo
+```
+GitHub:
+  upstream:    github.com/moq-dev/moq (Luke's repo)
+  fork:        github.com/erikherz/moq (our patched version)
 
-**Pros**: Simple, keeps everything in one repo
-**Cons**: Harder to track upstream changes
-
-### Option B: Fork moq-dev/moq
-
-1. Fork to `erikherz/moq`
-2. Create branch `cloudflare-announce-remote`
-3. Make changes and push
-4. Update `Cargo.toml` to point to fork:
-
-```toml
-moq-lite = { git = "https://github.com/erikherz/moq", branch = "cloudflare-announce-remote", package = "moq-lite" }
+linode-moq-14/
+  └── moq/     submodule → erikherz/moq @ cloudflare-patch branch
 ```
 
-**Pros**: Clean separation, easy to PR upstream, easy to update from upstream
-**Cons**: Another repo to manage
+### Current State
 
-### Option C: Wait for upstream
+| Item | Value |
+|------|-------|
+| Fork | `github.com/erikherz/moq` |
+| Branch | `cloudflare-patch` |
+| Base commit | `fe72aeb` (Jan 9, 2026 - stable, no nightly Rust features) |
+| Patch status | **Not yet implemented** - branch exists but no changes yet |
 
-Ask Luke to add this feature. He may have a better design in mind.
+### Why a Fork?
+
+If we only patch the submodule locally:
+- Changes exist only on your machine
+- `git clone --recursive` fails for others (commit doesn't exist in Luke's repo)
+- CI/CD can't build
+
+With a fork:
+- Changes live on GitHub at `erikherz/moq`
+- Fresh clones work: `git clone --recursive` gets our patched code
+- Linode server can `git pull && cargo build` without issues
+
+### Cloning Fresh
+
+```bash
+git clone --recursive https://github.com/erikherz/linode-moq-14
+cd linode-moq-14
+
+# moq/ submodule automatically pulls from erikherz/moq, cloudflare-patch branch
+```
+
+### Adding the Patch
+
+```bash
+cd moq
+
+# Make changes to files in rs/moq-lite/src/...
+# (see "Files to Modify" section above)
+
+git add -A
+git commit -m "Add announce_remote() for CloudFlare bridge"
+git push erikherz cloudflare-patch
+
+cd ..
+git add moq
+git commit -m "Update moq submodule with announce_remote patch"
+git push
+```
+
+### Syncing with Upstream (Future)
+
+If Luke adds features we want:
+
+```bash
+cd moq
+git fetch origin                          # Fetch from Luke's repo
+git merge origin/main                     # Merge upstream changes
+git push erikherz cloudflare-patch        # Push to our fork
+cd ..
+git add moq
+git commit -m "Sync moq with upstream"
+git push
+```
 
 ## Complexity
 
