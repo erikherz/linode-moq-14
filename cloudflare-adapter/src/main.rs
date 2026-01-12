@@ -245,7 +245,8 @@ async fn run_bridge_manager(
                     drop(state_guard); // Release lock before spawning
 
                     let stream_id = stream.stream_id.clone();
-                    let namespace = stream.namespace.clone();
+                    // Construct namespace from stream_id using earthseed.live/{stream_id} pattern
+                    let namespace = format!("earthseed.live/{}", stream.stream_id);
                     let from_cf = from_cloudflare.clone();
                     let to_relay = to_relay.clone();
                     let bridge_state_clone = bridge_state.clone();
@@ -343,13 +344,8 @@ struct RegistryResponse {
 #[derive(Debug, serde::Deserialize)]
 struct StreamInfo {
     stream_id: String,
-    /// The full namespace on CloudFlare (e.g., "earthseed.live/abc123")
-    #[serde(default)]
-    namespace: String,
     #[serde(default = "default_origin")]
     origin: String,
-    #[serde(default)]
-    viewer_count: u32,
 }
 
 fn default_origin() -> String {
