@@ -1263,7 +1263,7 @@ dependencies = [
 [[package]]
 name = "moq-lite"
 version = "0.10.1"
-source = "git+https://github.com/moq-dev/moq?rev=fe72aeb#fe72aeb3b2c78614d4544f49c42188f410e258a1"
+source = "git+https://github.com/erikherz/moq?branch=cloudflare-patch#e0d1598fc95f9577475de84516903d9f35fd1dae"
 dependencies = [
  "async-channel",
  "bytes",
@@ -1280,7 +1280,7 @@ dependencies = [
 [[package]]
 name = "moq-native"
 version = "0.10.1"
-source = "git+https://github.com/moq-dev/moq?rev=fe72aeb#fe72aeb3b2c78614d4544f49c42188f410e258a1"
+source = "git+https://github.com/erikherz/moq?branch=cloudflare-patch#e0d1598fc95f9577475de84516903d9f35fd1dae"
 dependencies = [
  "anyhow",
  "clap",

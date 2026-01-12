@@ -3,9 +3,9 @@ resolver = "2"
 members = ["cloudflare-adapter"]
 
 [workspace.dependencies]
-# Luke's moq-lite libraries (pinned to same commit as submodule: fe72aeb)
-moq-lite = { git = "https://github.com/moq-dev/moq", rev = "fe72aeb", package = "moq-lite" }
-moq-native = { git = "https://github.com/moq-dev/moq", rev = "fe72aeb", package = "moq-native" }
+# Our patched moq-lite with announce_remote() for CloudFlare bridge
+moq-lite = { git = "https://github.com/erikherz/moq", branch = "cloudflare-patch", package = "moq-lite" }
+moq-native = { git = "https://github.com/erikherz/moq", branch = "cloudflare-patch", package = "moq-native" }
 
 # Common dependencies
 tokio = { version = "1", features = ["full"] }

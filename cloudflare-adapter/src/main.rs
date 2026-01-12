@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use clap::Parser;
-use moq_lite::{Origin, OriginConsumer, OriginProducer};
+use moq_lite::{Origin, OriginConsumer, OriginProducer, Session};
 use moq_native::ClientConfig;
 use tokio::sync::RwLock;
 use url::Url;
@@ -47,6 +47,11 @@ struct BridgeState {
     active_bridges: HashSet<String>,
 }
 
+/// Shared state for the CloudFlare session
+struct CloudFlareState {
+    session: Option<Session>,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
@@ -77,8 +82,13 @@ async fn main() -> anyhow::Result<()> {
     // Origin for broadcasts we receive FROM CloudFlare
     let from_cloudflare = Arc::new(Origin::produce());
 
-    let state = Arc::new(RwLock::new(BridgeState {
+    let bridge_state = Arc::new(RwLock::new(BridgeState {
         active_bridges: HashSet::new(),
+    }));
+
+    // Shared CloudFlare session state
+    let cf_state = Arc::new(RwLock::new(CloudFlareState {
+        session: None,
     }));
 
     tokio::select! {
@@ -92,13 +102,15 @@ async fn main() -> anyhow::Result<()> {
         res = run_cloudflare_connection(
             client.clone(),
             &config,
-            from_cloudflare.clone()
+            from_cloudflare.clone(),
+            cf_state.clone()
         ) => {
             res.context("cloudflare connection failed")?;
         }
         res = run_bridge_manager(
             &config,
-            state.clone(),
+            bridge_state.clone(),
+            cf_state.clone(),
             from_cloudflare.consumer.clone(),
             to_relay.producer.clone()
         ) => {
@@ -145,12 +157,12 @@ async fn run_relay_connection(
 }
 
 /// Connect to CloudFlare as a subscriber
-/// Receives PUBLISH_NAMESPACE for streams (if CF sends them)
-/// More importantly: allows us to SUBSCRIBE to specific streams
+/// Stores the session so bridge_stream can call announce_remote()
 async fn run_cloudflare_connection(
     client: moq_native::Client,
     config: &Config,
     from_cloudflare: Arc<moq_lite::Produce<OriginProducer, OriginConsumer>>,
+    cf_state: Arc<RwLock<CloudFlareState>>,
 ) -> anyhow::Result<()> {
     let url = Url::parse(&config.cloudflare_url)?;
 
@@ -165,8 +177,36 @@ async fn run_cloudflare_connection(
         match client.connect(url.clone(), publish, subscribe).await {
             Ok(session) => {
                 tracing::info!("connected to cloudflare");
-                let _ = session.closed().await;
+
+                // Store the session so bridge manager can use announce_remote()
+                {
+                    let mut state = cf_state.write().await;
+                    state.session = Some(session);
+                }
+
+                // Wait for the session to close
+                // We need to get the session back to call closed() on it
+                loop {
+                    let session_closed = {
+                        let state = cf_state.read().await;
+                        // Session exists, keep polling
+                        state.session.is_none()
+                    };
+
+                    if session_closed {
+                        break;
+                    }
+
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+
                 tracing::warn!("cloudflare connection closed");
+
+                // Clear the session
+                {
+                    let mut state = cf_state.write().await;
+                    state.session = None;
+                }
             }
             Err(err) => {
                 tracing::error!(%err, "failed to connect to cloudflare");
@@ -180,7 +220,8 @@ async fn run_cloudflare_connection(
 /// Polls your registry for CF streams and bridges them
 async fn run_bridge_manager(
     config: &Config,
-    state: Arc<RwLock<BridgeState>>,
+    bridge_state: Arc<RwLock<BridgeState>>,
+    cf_state: Arc<RwLock<CloudFlareState>>,
     from_cloudflare: OriginConsumer,
     to_relay: OriginProducer,
 ) -> anyhow::Result<()> {
@@ -190,7 +231,7 @@ async fn run_bridge_manager(
         match fetch_cloudflare_streams(&http_client, &config.registry_url).await {
             Ok(streams) => {
                 for stream in streams {
-                    let mut state_guard = state.write().await;
+                    let mut state_guard = bridge_state.write().await;
 
                     // Skip if already bridging
                     if state_guard.active_bridges.contains(&stream.stream_id) {
@@ -204,18 +245,20 @@ async fn run_bridge_manager(
                     drop(state_guard); // Release lock before spawning
 
                     let stream_id = stream.stream_id.clone();
+                    let namespace = stream.namespace.clone();
                     let from_cf = from_cloudflare.clone();
                     let to_relay = to_relay.clone();
-                    let state_clone = state.clone();
+                    let bridge_state_clone = bridge_state.clone();
+                    let cf_state_clone = cf_state.clone();
 
                     // Spawn a task to bridge this specific stream
                     tokio::spawn(async move {
-                        if let Err(err) = bridge_stream(&stream_id, from_cf, to_relay).await {
+                        if let Err(err) = bridge_stream(&stream_id, &namespace, cf_state_clone, from_cf, to_relay).await {
                             tracing::warn!(%err, stream_id = %stream_id, "bridge failed");
                         }
 
                         // Remove from active bridges when done
-                        let mut state_guard = state_clone.write().await;
+                        let mut state_guard = bridge_state_clone.write().await;
                         state_guard.active_bridges.remove(&stream_id);
                     });
                 }
@@ -232,20 +275,38 @@ async fn run_bridge_manager(
 /// Bridge a single stream from CloudFlare to your relay
 async fn bridge_stream(
     stream_id: &str,
+    namespace: &str,
+    cf_state: Arc<RwLock<CloudFlareState>>,
     from_cloudflare: OriginConsumer,
     to_relay: OriginProducer,
 ) -> anyhow::Result<()> {
-    tracing::info!(stream_id, "starting bridge");
+    tracing::info!(stream_id, namespace, "starting bridge");
 
-    // Subscribe to the broadcast on CloudFlare
-    // This sends SUBSCRIBE (not SUBSCRIBE_NAMESPACE) for the specific stream
+    // First, announce the remote broadcast to trigger the subscription machinery
+    // This is needed because CloudFlare doesn't send PUBLISH_NAMESPACE
+    {
+        let state = cf_state.read().await;
+        if let Some(ref session) = state.session {
+            session.announce_remote(namespace).await
+                .context("failed to announce remote")?;
+            tracing::info!(namespace, "announced remote broadcast");
+        } else {
+            anyhow::bail!("cloudflare session not connected");
+        }
+    }
+
+    // Give some time for the subscription to be set up
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Now consume the broadcast - it should exist after announce_remote()
     let broadcast = from_cloudflare
-        .consume_broadcast(stream_id)
-        .context("stream not found on cloudflare")?;
+        .consume_broadcast(namespace)
+        .context("broadcast not found after announce_remote")?;
 
-    // Publish it to your relay
-    // This makes it appear in your relay's `secondary` origin
+    // Publish it to your relay with the stream_id as the path
     to_relay.publish_broadcast(stream_id, broadcast.clone());
+
+    tracing::info!(stream_id, namespace, "bridge active");
 
     // Keep the bridge alive until the broadcast ends
     broadcast.closed().await;
@@ -282,6 +343,9 @@ struct RegistryResponse {
 #[derive(Debug, serde::Deserialize)]
 struct StreamInfo {
     stream_id: String,
+    /// The full namespace on CloudFlare (e.g., "earthseed.live/abc123")
+    #[serde(default)]
+    namespace: String,
     #[serde(default = "default_origin")]
     origin: String,
     #[serde(default)]
