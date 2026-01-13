@@ -99,13 +99,98 @@ sudo systemctl start moq-earthseed moq-adapter
 
 ## Architecture
 
+### Pure Linode Mode (Recommended)
+All traffic goes through your relay servers. No adapter needed.
+
 ```
-Safari ──WebSocket──▶ [moq-lite Relay] ◀──cluster──▶ [CloudFlare Adapter]
+Chrome ──WebTransport──▶ [moq-lite Relay]
+Safari ──WebSocket─────▶ us-central.earthseed.live
+```
+
+### CloudFlare Hybrid Mode
+Chrome uses CloudFlare CDN, Safari uses your relay. Requires the adapter to bridge streams.
+
+```
+Safari ──WebSocket──▶ [moq-lite Relay] ◀──bridge──▶ [CloudFlare Adapter]
                       us-central.earthseed.live              │
                                                              │
                                                              ▼
 Chrome ──WebTransport──────────────────────────────▶ [CloudFlare CDN]
-                                                    relay.quic.video
+                                        relay-next.cloudflare.mediaoverquic.com
+```
+
+> **Note:** The adapter is only needed for CloudFlare hybrid mode. For pure Linode mode, only run `moq-earthseed.service`.
+
+## Multi-Region Deployment
+
+To deploy additional relay servers in other regions:
+
+### 1. Provision Servers
+
+| Region | Domain | Location |
+|--------|--------|----------|
+| US Central | us-central.earthseed.live | Dallas |
+| EU Central | eu-central.earthseed.live | Frankfurt |
+| AP South | ap-south.earthseed.live | Singapore |
+
+### 2. DNS Setup
+Point each domain to its server's IP address.
+
+### 3. SSL Certificates
+```bash
+# On each server
+sudo apt install certbot
+sudo certbot certonly --standalone -d <domain>
+# Certs will be at /etc/letsencrypt/live/<domain>/
+```
+
+### 4. Build on Each Server
+```bash
+git clone --recursive https://github.com/erikherz/linode-moq-14
+cd linode-moq-14/moq
+rustup run nightly cargo build --release -p moq-relay
+```
+
+### 5. Create Systemd Service
+Create `/etc/systemd/system/moq-earthseed.service` with your domain:
+
+```ini
+[Unit]
+Description=MOQ Relay (Earthseed - Draft 14)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/root/linode-moq-14/moq/target/release/moq-relay \
+  --server-bind 0.0.0.0:443 \
+  --tls-cert /etc/letsencrypt/live/<YOUR-DOMAIN>/fullchain.pem \
+  --tls-key /etc/letsencrypt/live/<YOUR-DOMAIN>/privkey.pem \
+  --auth-public ""
+Restart=always
+RestartSec=1
+SyslogIdentifier=moq-earthseed
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 6. Enable and Start
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable moq-earthseed
+sudo systemctl start moq-earthseed
+sudo systemctl status moq-earthseed
+```
+
+### 7. Update Earthseed Client
+After deploying multiple relays, update `earthseed/src/main.ts` to race connections and pick the fastest:
+
+```typescript
+const LINODE_RELAYS = [
+  "https://us-central.earthseed.live/anon",
+  "https://eu-central.earthseed.live/anon",
+  "https://ap-south.earthseed.live/anon",
+];
 ```
 
 See [moq-lite_to_cf.md](./moq-lite_to_cf.md) for detailed design documentation.
