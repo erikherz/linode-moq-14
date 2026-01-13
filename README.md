@@ -60,6 +60,9 @@ ExecStart=/root/linode-moq-14/moq/target/release/moq-relay \
   --server-bind 0.0.0.0:443 \
   --tls-cert /etc/letsencrypt/live/us-central.earthseed.live/fullchain.pem \
   --tls-key /etc/letsencrypt/live/us-central.earthseed.live/privkey.pem \
+  --web-https-listen 0.0.0.0:443 \
+  --web-https-cert /etc/letsencrypt/live/us-central.earthseed.live/fullchain.pem \
+  --web-https-key /etc/letsencrypt/live/us-central.earthseed.live/privkey.pem \
   --auth-public ""
 Restart=always
 RestartSec=1
@@ -165,6 +168,9 @@ ExecStart=/root/linode-moq-14/moq/target/release/moq-relay \
   --server-bind 0.0.0.0:443 \
   --tls-cert /etc/letsencrypt/live/<YOUR-DOMAIN>/fullchain.pem \
   --tls-key /etc/letsencrypt/live/<YOUR-DOMAIN>/privkey.pem \
+  --web-https-listen 0.0.0.0:443 \
+  --web-https-cert /etc/letsencrypt/live/<YOUR-DOMAIN>/fullchain.pem \
+  --web-https-key /etc/letsencrypt/live/<YOUR-DOMAIN>/privkey.pem \
   --auth-public ""
 Restart=always
 RestartSec=1
@@ -173,6 +179,8 @@ SyslogIdentifier=moq-earthseed
 [Install]
 WantedBy=multi-user.target
 ```
+
+> **Note:** The `--web-https-*` flags enable HTTPS on port 443 for health checks and latency racing.
 
 ### 6. Enable and Start
 ```bash
